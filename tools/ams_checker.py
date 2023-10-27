@@ -14,22 +14,23 @@ TOKEN = ''
 URL_TEMPLATE = ('https://msg.argo.grnet.gr/v1/projects/accounting/'
                 'subscriptions/{sub}:offsets?key={token}')
 TYPES = ('grid', 'cloud', 'storage')
+subs = []
 
 print("Subscription     \tBacklog")
 print("-"*31)
 for type in TYPES:
     for service in ('repository', 'portal'):
         sub = service + '-' + type
-        url = URL_TEMPLATE.format(sub=sub, token=TOKEN)
-        # print(url)
-        response = urllib.urlopen(url)
-        data = json.loads(response.read())
-        # print(data)
-        # print(data['current'], data['max'], data['max'] - data['current'])
-        print(sub, data['max'] - data['current'], sep='     \t')
+        subs.append(sub)
+        if service == 'portal':
+            sub = service + '-' + type + '-preprod'
+            subs.append(sub)
 
 for type in TYPES[0:2]:
     sub = 'IRIS-' + type + '-APEL'
+    subs.append(sub)
+
+for sub in subs:
     url = URL_TEMPLATE.format(sub=sub, token=TOKEN)
     response = urllib.urlopen(url)
     data = json.loads(response.read())
