@@ -1,0 +1,19 @@
+USE clientdb;
+
+LOAD DATA INFILE 'spec.csv' IGNORE INTO TABLE SpecRecords 
+    FIELDS TERMINATED BY ',' 
+    ENCLOSED BY '"' 
+    LINES TERMINATED BY '\n' 
+    IGNORE 3 ROWS;
+
+LOAD DATA INFILE 'blahd.csv' INTO TABLE BlahdRecords 
+    FIELDS TERMINATED BY ',' 
+    ENCLOSED BY '"' 
+    LINES TERMINATED BY '\n' 
+    IGNORE 3 ROWS;
+ 
+LOAD DATA INFILE 'event.csv' INTO TABLE EventRecords 
+    FIELDS TERMINATED BY ',' 
+    ENCLOSED BY '"' 
+    LINES TERMINATED BY '\n' 
+    IGNORE 3 ROWS;
