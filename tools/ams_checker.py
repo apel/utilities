@@ -4,10 +4,8 @@
 # https://realpython.com/python-string-formatting/
 # https://stackoverflow.com/a/12965254/1442342
 
-from __future__ import print_function
-
 import json
-import urllib
+from urllib.request import urlopen
 
 # An admin token for the AMS project needs to be provided.
 TOKEN = ''
@@ -32,6 +30,6 @@ for type in TYPES[0:2]:
 
 for sub in subs:
     url = URL_TEMPLATE.format(sub=sub, token=TOKEN)
-    response = urllib.urlopen(url)
-    data = json.loads(response.read())
+    with urlopen(url) as response:
+        data = json.loads(response.read())
     print(sub, data['max'] - data['current'], sep='     \t')
