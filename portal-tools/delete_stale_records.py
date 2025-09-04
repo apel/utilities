@@ -5,7 +5,7 @@ This script connects to a MySQL database and deletes stale records from a specif
 Records are only deleted if the number of recent entries (within a user-defined timeframe)
 meets or exceeds a threshold.
 
-The script supports dry_run mode.
+The script supports `--dry-run` mode.
 
 NOTE:
     Before running this script, ensure the following:
@@ -16,33 +16,38 @@ NOTE:
     - The directory for the log file exists and is writable.
 
     You can override the default paths using:
-        --db /path/to/delete_stale_records.cfg
+        --script_config /path/to/delete_stale_records.cfg
         --log_config /path/to/delete_stale_records.log
 
 Usage:
     python delete_stale_records.py
-    python delete_stale_records.py --dry_run
-    python delete_stale_records.py --db /path/to/delete_stale_records.cfg --log_config /path/to/delete_stale_records.log
+    python delete_stale_records.py --dry-run
+    python delete_stale_records.py --script_config /path/to/delete_stale_records.cfg --log_config /path/to/delete_stale_records.log
 """
 
 # Requirements:
-# mysqlclient==2.1.1  # Latest package; works with Python 3.9+. Dropped support for Python 3.6.
-# Installation examples:
-# - For Python 3.6: python3.6 -m pip install mysqlclient==2.1.1
-# - For Python 3.9: python3.9 -m pip install mysqlclient==2.1.1
+# mysqlclient==2.1.1  # This version works with both Python 3.6 and 3.9.
 
+# Installation examples:
+# - For Python 3.6 and Python 3.9: python3 -m pip install mysqlclient==2.1.1
+
+import logging
 import os
 import sys
-import logging
-from datetime import timedelta
 from argparse import ArgumentParser
-from configparser import ConfigParser, NoSectionError, NoOptionError
+from configparser import ConfigParser, NoOptionError, NoSectionError
+from datetime import timedelta
+
 import MySQLdb
 
+# Constants
 LOG_BREAK = '====================='
+# Default config and log file paths
+DEFAULT_SCRIPT_CONFIG_PATH = '/etc/apel/delete_stale_records.cfg'
+DEFAULT_LOGFILE_PATH = '/var/log/apel/delete_stale_records.log'
 
 
-def delete_stale_records(cp, args):
+def delete_stale_records(config_parser, args):
     """
     Deletes stale records from the configured MySQL table based on UpdateTime.
 
@@ -50,7 +55,7 @@ def delete_stale_records(cp, args):
     but only if the number of recent records (within timeframe) meets the threshold.
 
     Parameters:
-        cp: Parsed configuration object.
+        config_parser: Parsed configuration object.
         args: Parsed command-line arguments.
     """
     conn = None
@@ -59,21 +64,20 @@ def delete_stale_records(cp, args):
     try:
         # Extract database details from the "*.cfg" file
         db_config = {
-            'backend': cp.get('db', 'backend'),
-            'host': cp.get('db', 'hostname'),
-            'port': cp.getint('db', 'port'),
-            'user': cp.get('db', 'username'),
-            'password': cp.get('db', 'password'),
-            'database': cp.get('db', 'name'),
-            'table_name': cp.get('db', 'table_name'),
-            'timeframe': cp.getint('common', 'timeframe'),
-            'threshold': cp.getint('common', 'threshold'),
+            'host': config_parser.get('db', 'hostname'),
+            'port': config_parser.getint('db', 'port'),
+            'user': config_parser.get('db', 'username'),
+            'password': config_parser.get('db', 'password'),
+            'schema_name': config_parser.get('db', 'schema_name'),
+            'table_name': config_parser.get('db', 'table_name'),
+            'timeframe': config_parser.getint('common', 'timeframe'),
+            'threshold': config_parser.getint('common', 'threshold'),
         }
 
         # Ensure no required string is empty
-        for key in ['backend', 'host', 'user', 'password', 'database', 'table_name']:
-            if not db_config[key].strip():
-                raise ValueError(f"'{key}' in config is empty")
+        for key in ['host', 'port', 'user', 'password', 'schema_name', 'table_name']:
+            if not str(db_config[key]).strip():
+                raise ValueError(f"'{key}' in the script config is empty")
 
         # Numeric validations
         if db_config['timeframe'] <= 0:
@@ -82,6 +86,7 @@ def delete_stale_records(cp, args):
             raise ValueError("'threshold' must be > 0")
 
     except (NoSectionError, NoOptionError) as e:
+        print(f"Please ensure that the file exists and is readable at: {args.script_config}")
         print(f"Configuration error: {e}")
         sys.exit(1)
     except ValueError as e:
@@ -89,12 +94,13 @@ def delete_stale_records(cp, args):
         sys.exit(1)
 
     try:
+        # Connect to MySQL
         conn = MySQLdb.connect(
             host=db_config['host'],
             port=db_config['port'],
             user=db_config['user'],
             passwd=db_config['password'],
-            db=db_config['database']
+            db=db_config['schema_name']
         )
         cursor = conn.cursor()
 
@@ -104,16 +110,10 @@ def delete_stale_records(cp, args):
         )
 
         if cursor.fetchone() is None:
-            column_not_found_error = (
+            log.error(
                 f"'UpdateTime' column not found in table "
                 f"'{db_config['table_name']}'. Aborting operation."
             )
-
-            if args.dry_run:
-                print(column_not_found_error)
-            else:
-                log.error(column_not_found_error)
-
             return
 
         # Get the latest UpdateTime value
@@ -123,84 +123,73 @@ def delete_stale_records(cp, args):
         result = cursor.fetchone()
 
         if not result or not result[0]:
-            no_records_found_error = "No UpdateTime values found. Nothing to purge."
-
-            if args.dry_run:
-                print(no_records_found_error)
-            else:
-                log.error(no_records_found_error)
-            
+            log.warning("No UpdateTime values found. Nothing to purge.")
             return
 
         max_update = result[0]
         cutoff_time = max_update - timedelta(hours=db_config['timeframe'])
         cutoff_str = cutoff_time.strftime('%Y-%m-%d %H:%M:%S')
 
+        # Count preserved records
         cursor.execute(
             f"SELECT COUNT(*) FROM {db_config['table_name']} WHERE UpdateTime >= %s",
             (cutoff_str,)
         )
-        preserved_count = cursor.fetchone()[0]
-        deletable_count = 0
+        preservable_records_count = cursor.fetchone()[0]
 
+        # Count deletable records
+        cursor.execute(
+            f"SELECT COUNT(*) FROM {db_config['table_name']} WHERE UpdateTime < %s",
+            (cutoff_str,)
+        )
+        deletable_records_count = cursor.fetchone()[0]
+
+        # Summary log
         summary = (
             f"[SUMMARY] Table: {db_config['table_name']} | "
             f"Timeframe: {db_config['timeframe']}h | "
             f"Threshold: {db_config['threshold']} | "
-            f"Preserved: {preserved_count} | "
-            f"Deletable: {deletable_count} | "
+            f"Preservable Records: {preservable_records_count} | "
+            f"Deletable Records: {deletable_records_count} | "
             f"Cutoff: {cutoff_str}"
         )
+        log.info(summary)
 
-        if preserved_count < db_config['threshold']:
-            records_below_threshold_error = (
-                f"Preserved records ({preserved_count}) below threshold "
+        # Threshold check
+        if preservable_records_count < db_config['threshold']:
+            log.warning(
+                f"Preservable records ({preservable_records_count}) below threshold "
                 f"({db_config['threshold']}). Skipping deletion."
             )
+            return
 
-            if args.dry_run:
-                print(f"{summary} | Action: DRY_RUN")
-                print(records_below_threshold_error)
-            else:
-                log.info(f"{summary} | Action: ABORT")
-                log.warning(records_below_threshold_error)
-        else:
-            cursor.execute(
-                f"SELECT COUNT(*) FROM {db_config['table_name']} WHERE UpdateTime < %s",
-                (cutoff_str,)
-            )
-            deletable_count = cursor.fetchone()[0]
 
-            records_deleted_msg = (
-                f"{deletable_count} rows deleted successfully from the"
+        # Perform deletion or simulate
+        if args.dry_run:
+            log.info(
+                f"DRY_RUN: {deletable_records_count} rows would be deleted from the "
                 f"'{db_config['table_name']}' (UpdateTime < {cutoff_str})."
             )
+        else:
+            log.info("Starting transaction for stale record deletion.")
 
-            if not args.dry_run:
-                cursor.execute(
-                    f"DELETE FROM {db_config['table_name']} WHERE UpdateTime < %s",
-                    (cutoff_str,)
-                )
-                deleted_rows = cursor.rowcount
-                conn.commit()
-
-                log.info(f"{summary} | Action: SUCCESS")
-                log.info(
-                    f"{deletable_count} rows deleted successfully from the"
-                    f"'{db_config['table_name']}' (UpdateTime < {cutoff_str})."
-                )
-            else:
-                print(f"{summary} | Action: DRY_RUN")
-                print(
-                    f"DRY_RUN: {deletable_count} rows would be deleted from the"
-                    f"'{db_config['table_name']}' (UpdateTime < {cutoff_str})."
-                )
+            cursor.execute(
+                f"DELETE FROM {db_config['table_name']} WHERE UpdateTime < %s",
+                (cutoff_str,)
+            )
+            deleted_rows = cursor.rowcount
+            conn.commit()
+            log.info(
+                f"{deleted_rows} rows deleted successfully from the "
+                f"'{db_config['table_name']}' (UpdateTime < {cutoff_str})."
+            )
 
     except MySQLdb.Error as err:
         log.error(f"MySQL error: {err}")
         if conn:
             conn.rollback()
             log.warning("Transaction rolled back due to error.")
+
     finally:
         if cursor:
             cursor.close()
@@ -209,16 +198,12 @@ def delete_stale_records(cp, args):
 
 
 if __name__ == '__main__':
-    # Default config and log file paths
-    default_config_path = '/etc/apel/delete_stale_records.cfg'
-    default_logfile_path = '/var/log/apel/delete_stale_records.log'
-
     # Parse CLI arguments
     parser = ArgumentParser(description='Delete stale records from APEL DB.')
     parser.add_argument(
-        '-d', '--db',
-        help='Location of DB config file',
-        default=default_config_path
+        '-c', '--script_config',
+        help='Location of script config file',
+        default=DEFAULT_SCRIPT_CONFIG_PATH
     )
     parser.add_argument(
         '-l', '--log_config',
@@ -226,36 +211,40 @@ if __name__ == '__main__':
         default=None
     )
     parser.add_argument(
-        '--dry_run',
+        '--dry-run',
+        dest='dry_run',
         action='store_true',
         help='Preview deletions without executing'
     )
     args = parser.parse_args()
 
     # Load configuration file
-    cp = ConfigParser()
-    read_files = cp.read(args.db)
-    if not read_files:
-        print(f"Error: Failed to read config file: {args.db}")
+    config_parser = ConfigParser()
+    file_read = config_parser.read(args.script_config)
+    if not file_read:
+        print(f"ERROR: Failed to read script config file: {args.script_config}")
         sys.exit(1)
 
     # Ensure log directory exists
-    logfile_path = args.log_config or cp.get('logging', 'logfile', fallback=default_logfile_path)
-    log_dir = os.path.dirname(logfile_path)
-    if not os.path.isdir(log_dir):
-        print(f"Error: Log directory does not exist: {log_dir}")
+    LOGFILE_PATH = args.log_config or config_parser.get('logging', 'logfile', fallback=DEFAULT_LOGFILE_PATH)
+    LOG_DIR = os.path.dirname(LOGFILE_PATH)
+    if not os.path.isdir(LOG_DIR):
+        print(f"ERROR: Log directory does not exist: {LOG_DIR}")
         sys.exit(1)
 
-    logging.basicConfig(
-        filename=logfile_path,
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
-    )
+    # Configure logger
     log = logging.getLogger(__name__)
+    log.setLevel(logging.INFO)
 
     if args.dry_run:
-        print(f"{LOG_BREAK}\nStarting APEL DB Purge Script\n")
+        handler = logging.StreamHandler(sys.stdout)
     else:
-        log.info(f"{LOG_BREAK}\nStarting APEL DB Purge Script\n")
+        handler = logging.FileHandler(LOGFILE_PATH)
 
-    delete_stale_records(cp, args)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    log.addHandler(handler)
+
+    log.info(f"{LOG_BREAK}\nStarting APEL DB Purge Script\n")
+
+    delete_stale_records(config_parser, args)
