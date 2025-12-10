@@ -1,0 +1,58 @@
+# APEL Router Configuration
+# This file configures the APEL Message Router.
+# It defines directory paths, message classification rules, and logging settings.
+
+# NOTE: Please esnure you are pointing to the specific path in `common` and `paths` section
+common:
+  incoming_message_path: /var/spool/apel/incoming
+  rejected_message_path: /var/spool/apel/reject
+  pidfile: /var/run/apel/apelrouter.pid
+  interval: 60 # Polling interval in seconds
+
+
+# Directory Paths & Anchors
+# Define reusable path aliases (anchors) here for consistency across the file.
+# you are allowed to add more paths 
+paths:
+  grid_path: &GRID /var/spool/apel/grid/incoming
+  cloud_path: &CLOUD /var/spool/apel/cloud/incoming
+  storage_path: &STORAGE /var/spool/apel/storage/incoming
+  acc_path: &ACC /var/spool/apel/accelerator/incoming
+  ip_path: &IP /var/spool/apel/ip/incoming
+
+
+# Routing Rules
+# Strict Version Matching vs Base Type Matching
+
+# Reference Examples
+# The keys used below must correspond exactly to the constants defined in:
+# https://github.com/apel/apel/blob/dev/apel/db/__init__.py
+# or must be manually defined within the router script itself.
+#
+# Examples:
+# ACCELERATOR_SUMMARY_MSG_TYPE: *ACC
+# SUMMARY_MSG_HEADER:           *GRID
+# CLOUD_MSG_HEADER:             *CLOUD
+# JOB_MSG_HEADER:               *GRID
+# NORMALISED_SUMMARY_MSG_HEADER_04: *GRID
+# SYNC_MSG_HEADER:              *GRID
+# CLOUD_SUMMARY_MSG_HEADER:     *CLOUD
+
+# Strict Version Matching 
+# Messages in this section require an exact match of the "Type" and "Version"
+# fields (for JSON) or the full header line (either the full XML text or text with `:` in the text).
+message_types_with_version:
+  ACCELERATOR_MSG_TYPE: *ACC
+  CLOUD_MSG_HEADER:     *CLOUD
+  IP_RECORDS:           *IP
+
+# Base Type Matching
+# Messages in this section are matched solely by the "Type" field (JSON)
+# or the header prefix (Ignores text after `:`)
+message_types_without_version:
+  JOB_MSG_HEADER: *GRID
+
+
+# 4. Logging Configuration
+logging:
+  logfile: /var/log/apel/apelrouter.log
