@@ -1,0 +1,61 @@
+# APEL Router Configuration
+# This file configures the APEL Message Router.
+
+# NOTE: Please ensure you are pointing to the specific path in `common` and `paths` section
+common:
+  incoming_message_path: /var/spool/apel/incoming
+  rejected_message_path: /var/spool/apel/reject
+  pidfile: /var/run/apel/apelrouter.pid
+  interval: 60 # Polling interval in seconds
+
+
+# Directory Paths & Anchors
+# YAML also has a handy feature called 'anchors', which let you easily duplicate
+# content across your document.
+# Anchors identified by & character which define the value.
+# Aliases identified by * character which acts as "see above" command.
+# You are allowed to add more paths with any key name
+paths:
+  grid_path: &GRID /var/spool/apel/grid/incoming
+  cloud_path: &CLOUD /var/spool/apel/cloud/incoming
+  storage_path: &STORAGE /var/spool/apel/storage/incoming
+  acc_path: &ACC /var/spool/apel/accelerator/incoming
+  ip_path: &IP /var/spool/apel/ip/incoming
+
+
+### Routing Rules
+### Strict Version Matching vs Base Type Matching
+# Reference Examples
+# The keys used below must correspond exactly to the constants defined in:
+# https://github.com/apel/apel/blob/dev/apel/db/__init__.py
+# or must be manually defined within the router script itself.
+#
+# Examples:
+# ACCELERATOR_SUMMARY_MSG_TYPE: *ACC
+# SUMMARY_MSG_HEADER:           *GRID
+# CLOUD_MSG_HEADER:             *CLOUD
+# JOB_MSG_HEADER:               *GRID
+# NORMALISED_SUMMARY_MSG_HEADER_04: *GRID
+# SYNC_MSG_HEADER:              *GRID
+# CLOUD_SUMMARY_MSG_HEADER:     *CLOUD
+
+### Strict Version Matching
+# Messages in this section require an exact match of the "Type" and "Version" for JSON and APEL formates
+# 1. JSON:  Matches "Type" + ": " + "Version" (e.g., "APEL Public IP message: 0.2").
+# 2. APEL:  Matches the entire first line of the text file exactly.
+message_types_with_version:
+  ACCELERATOR_MSG_TYPE: *ACC
+  CLOUD_MSG_HEADER: *CLOUD
+  IP_RECORDS: *IP
+
+### Base Type Matching
+# This ignores version numbers across JSON and APEL formats
+# 1. JSON:  Matches the "Type" field only (ignores "Version" field).
+# 2. APEL:  Matches the text before the ":" on the first line.
+message_types_without_version:
+  JOB_MSG_HEADER: *GRID
+
+
+# Logging Configuration
+logging:
+  logfile: /var/log/apel/apelrouter.log
