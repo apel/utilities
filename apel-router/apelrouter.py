@@ -235,10 +235,7 @@ def get_header_from_content(body, headers_to_paths):
     raise ValueError("Unconfigured APEL format message type: %s" % first_line)
 
 
-# ---------------------------------------------------------------------------
-#  Router class
-# ---------------------------------------------------------------------------
-class Router(object):
+class Router:
     """
     Read messages from an incoming dirq queue, determine the record type,
     and route them to the appropriate destination dirq queue.
@@ -286,6 +283,7 @@ class Router(object):
         """Unlock the current message element and remove the pidfile."""
         if self.current_msg:
             try:
+                log.info("Unlocking message %s on shutdown.", self.current_msg)
                 self._inq.unlock(self.current_msg)
             except OSError as e:
                 log.error("Unable to remove lock: %s", e)
@@ -485,9 +483,9 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Setup Logging Path.
-    log_path = (args.log_file
-                or config.get("logging", {}).get("logfile",
-                                                  DEFAULT_LOGFILE_PATH))
+    log_path = args.log_file or config.get("logging", {}).get(
+        "logfile", DEFAULT_LOGFILE_PATH
+    )
     log_dir = os.path.dirname(log_path)
     if log_dir and not os.path.isdir(log_dir):
         print("ERROR: Log directory does not exist: %s", log_dir)

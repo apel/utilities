@@ -1,7 +1,7 @@
 # APEL Router Configuration
 # This file configures the APEL Message Router.
 
-# NOTE: Please ensure you are pointing to the specific path in `common` and `paths` section
+# NOTE: Please ensure you are pointing to the absolute path in `common` and `paths` section
 common:
   incoming_message_path: /var/spool/apel/incoming
   rejected_message_path: /var/spool/apel/reject
