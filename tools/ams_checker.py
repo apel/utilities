@@ -5,12 +5,13 @@
 # https://stackoverflow.com/a/12965254/1442342
 
 import json
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 # An admin token for the AMS project needs to be provided.
 TOKEN = ''
-URL_TEMPLATE = ('https://msg.argo.grnet.gr/v1/projects/accounting/'
-                'subscriptions/{sub}:offsets?key={token}')
+TOKEN_DEV = ''
+URL_TEMPLATE = ('https://{dev}msg.argo.grnet.gr/v1/projects/accounting/'
+                'subscriptions/{sub}:offsets')
 TYPES = ('grid', 'cloud', 'storage')
 subs = []
 
@@ -18,18 +19,36 @@ print("Subscription     \tBacklog")
 print("-"*31)
 for type in TYPES:
     for service in ('repository', 'portal'):
-        sub = service + '-' + type
-        subs.append(sub)
-        if service == 'portal':
-            sub = service + '-' + type + '-preprod'
-            subs.append(sub)
+        subs.append(service + '-' + type)
+        if service == 'repository':
+            subs.append(service + '-' + type + '-bkp')
+        elif type in TYPES[0:2]:
+            subs.append('cern-' + type)
 
 for type in TYPES[0:2]:
-    sub = 'IRIS-' + type + '-APEL'
-    subs.append(sub)
+    subs.append('IRIS-' + type + '-APEL')
+    subs.append('IRIS-' + type + '-APEL-bkp')
 
 for sub in subs:
-    url = URL_TEMPLATE.format(sub=sub, token=TOKEN)
-    with urlopen(url) as response:
+    url = URL_TEMPLATE.format(dev='', sub=sub)
+    req = Request(url, headers={'x-api-key': TOKEN})
+
+    with urlopen(req) as response:
+        data = json.loads(response.read())
+    print(sub, data['max'] - data['current'], sep='     \t')
+
+subs = [
+    'repo-hepscore-test', 'portal-hepscore-test',
+    'test-IRIS-accel-repo'
+]
+
+print("\ndevel Subscription \tBacklog")
+print("-"*31)
+
+for sub in subs:
+    url = URL_TEMPLATE.format(dev='api.devel.', sub=sub)
+    req = Request(url, headers={'x-api-key': TOKEN_DEV})
+
+    with urlopen(req) as response:
         data = json.loads(response.read())
     print(sub, data['max'] - data['current'], sep='     \t')
