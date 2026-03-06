@@ -36,3 +36,19 @@ for sub in subs:
     with urlopen(req) as response:
         data = json.loads(response.read())
     print(sub, data['max'] - data['current'], sep='     \t')
+
+subs = [
+    'repo-hepscore-test', 'portal-hepscore-test',
+    'test-IRIS-accel-repo'
+]
+
+print("\ndevel Subscription \tBacklog")
+print("-"*31)
+
+for sub in subs:
+    url = URL_TEMPLATE.format(dev='api.devel.', sub=sub)
+    req = Request(url, headers={'x-api-key': TOKEN_DEV})
+
+    with urlopen(req) as response:
+        data = json.loads(response.read())
+    print(sub, data['max'] - data['current'], sep='     \t')
