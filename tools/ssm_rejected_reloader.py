@@ -35,7 +35,8 @@ class Reloader:
         current_msg = self._inq.first()
         good_count = 0
         while current_msg:
-            #self._inq.unlock(current_msg)
+            # If a messy APEL or SSM exit has left locked messages, they can be unlocked using:
+            # self._inq.unlock(current_msg)
             if not self._inq.lock(current_msg):
                 print("Skipping locked message %s" % current_msg)
                 current_msg = next(self._inq, None)
