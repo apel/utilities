@@ -19,15 +19,15 @@ print("Subscription     \tBacklog")
 print("-"*31)
 for type in TYPES:
     for service in ('repository', 'portal'):
-        sub = service + '-' + type
-        subs.append(sub)
-        if service == 'portal':
-            sub = service + '-' + type + '-preprod'
-            subs.append(sub)
+        subs.append(service + '-' + type)
+        if service == 'repository':
+            subs.append(service + '-' + type + '-bkp')
+        elif type in TYPES[0:2]:
+            subs.append('cern-' + type)
 
 for type in TYPES[0:2]:
-    sub = 'IRIS-' + type + '-APEL'
-    subs.append(sub)
+    subs.append('IRIS-' + type + '-APEL')
+    subs.append('IRIS-' + type + '-APEL-bkp')
 
 for sub in subs:
     url = URL_TEMPLATE.format(dev='', sub=sub)
