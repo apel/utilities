@@ -5,12 +5,13 @@
 # https://stackoverflow.com/a/12965254/1442342
 
 import json
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 # An admin token for the AMS project needs to be provided.
 TOKEN = ''
-URL_TEMPLATE = ('https://msg.argo.grnet.gr/v1/projects/accounting/'
-                'subscriptions/{sub}:offsets?key={token}')
+TOKEN_DEV = ''
+URL_TEMPLATE = ('https://{dev}msg.argo.grnet.gr/v1/projects/accounting/'
+                'subscriptions/{sub}:offsets')
 TYPES = ('grid', 'cloud', 'storage')
 subs = []
 
@@ -29,7 +30,9 @@ for type in TYPES[0:2]:
     subs.append(sub)
 
 for sub in subs:
-    url = URL_TEMPLATE.format(sub=sub, token=TOKEN)
-    with urlopen(url) as response:
+    url = URL_TEMPLATE.format(dev='', sub=sub)
+    req = Request(url, headers={'x-api-key': TOKEN})
+
+    with urlopen(req) as response:
         data = json.loads(response.read())
     print(sub, data['max'] - data['current'], sep='     \t')
