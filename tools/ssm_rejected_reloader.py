@@ -44,6 +44,8 @@ class Reloader:
 
             data = self._inq.get(current_msg)
             if data["signer"] in ACCEPTED_CERTS and data["error"] == ACCEPTED_ERROR:
+                # The _handle_msg method is called directly, passing it self which contains
+                # the necessary variables like _cert and _key from the __init__ above.
                 extracted_msg, _signer, _err_msg = Ssm2._handle_msg(self, data["body"])
                 self._outq.add(
                     {'body': extracted_msg,
